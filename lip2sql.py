@@ -30,7 +30,7 @@ def main():
                      (TitleId integer primary key not null,Title varchar)''')
         c.execute('DROP TABLE IF EXISTS Person')
         c.execute('''CREATE TABLE Person
-                     (PersonId integer primary key not null,Name varchar,Surname varchar)''')
+                     (PersonId integer primary key not null,Name varchar,Surname varchar,Filename varchar)''')
         c.execute('DROP TABLE IF EXISTS Experience')
         c.execute('''CREATE TABLE Experience
                      (ExperienceID integer primary key not null,PersonID integer,CompanyID integer,TitleID integer,StartMonth varchar,StartYear varchar,EndMonth varchar,EndYear varchar,Ongoing integer )''')
@@ -79,7 +79,7 @@ def main():
         take string, returns a dictionary: {'from_month':'','from_year':'','to_month':'','to_year':''}
         """
         ret = {'from_month':'','from_year':'','to_month':'','to_year':''}
-        
+
         dates = dates.strip().split('-')
 
         if len(dates) == 2:      
@@ -160,13 +160,20 @@ def main():
         for idx,obj in enumerate(objs):
             company = title = ''
             if idx>0 and get_chars(objs[idx-1])[0].size > FONTSIZE:
-                    brackets = re.search('([(]+(.)*[)]+)',obj.get_text())
+                    tocheck=obj.get_text()
+                    print(tocheck)
+                    brackets = re.search('([(]+(.)*[)]+)',tocheck)
+                    thepresent = re.search('(Present)',tocheck)
+                    if (thepresent is not None) or (brackets is None):
+                        brackets=thepresent
                     if brackets:
                         header = objs[idx-1].get_text().split(' at ')
                         if len(header) == 2:
                             company = header[1].strip()
                             title   = header[0].strip()
-                        ret.append([title,company,parse_date(obj.get_text()[:brackets.start()])]) 
+                        experience = [title,company,parse_date(obj.get_text()[:brackets.start()])]
+                        print(experience)
+                        ret.append(experience)
         return ret
     def get_education_info(objs):
         """Collects schools,majors,dates, takes a list of LTObjects, returns a 
@@ -176,7 +183,13 @@ def main():
         ret = []
         degree = major = dates = school = ''
         for idx,obj in enumerate(objs):
-             if  get_chars(obj)[0].size > FONTSIZE:
+             thechars=get_chars(obj)
+             firstcharbig=thechars[0].size > FONTSIZE
+             lastcharbig=False
+             if (len(obj)-1>0): 
+               lastcharbig=thechars[len(obj)-3].size > FONTSIZE
+             if  firstcharbig and lastcharbig: 
+#                    print obj.get_text()
                     try:
                         next_object = objs[idx+1].get_text()
                     except Exception,e:
@@ -248,9 +261,9 @@ def main():
         name =  get_name(objs)[0].decode('utf8')
         surname =  get_name(objs)[1].decode('utf8')
         
-        person = c.execute('SELECT * FROM Person WHERE Name=? and Surname=?', [name,surname]).fetchone()
+        person = c.execute('SELECT * FROM Person WHERE Name=? and Surname=? and Filename=?', [name,surname,f]).fetchone()
         if not person:
-            c.execute("INSERT INTO Person VALUES (NULL,?,?)" , [name,surname])
+            c.execute("INSERT INTO Person VALUES (NULL,?,?,?)" , [name,surname,f])
             personId = c.lastrowid
         else:
             personId = person[0]
@@ -269,7 +282,8 @@ def main():
             exp_row['from_year']  = place[2]['from_year'] if 'from_year' in place[2] else ''
             exp_row['to_month']   = place[2]['to_month'] if 'to_month' in place[2] else '' 
             exp_row['to_year']    = place[2]['to_year'] if 'to_year' in place[2] else ''
-            exp_row['ongoing']    = 1 if exp_row['to_year'] == 'Present' else 0
+#            exp_row['ongoing']    = 1 if exp_row['to_year'] == 'Present' else 0
+            exp_row['ongoing']    = 1 if exp_row['to_year'] == '' else 0
             c.execute("INSERT INTO Experience VALUES (NULL,?,?,?,?,?,?,?,?)" , exp_row.values()) 
         for place in get_education_info(ed):
             for key in ed_row:
@@ -282,6 +296,7 @@ def main():
             ed_row['from_year']  = place[3]['from_year'] if 'from_year' in place[3] else ''
             ed_row['to_month']   = place[3]['to_month'] if 'to_month' in place[2] else '' 
             ed_row['to_year']    = place[3]['to_year'] if 'to_year' in place[3] else '' 
+#            ed_row['ongoing']    = 1 if exp_row['to_year'] == 'Present' else 0
             ed_row['ongoing']    = 1 if exp_row['to_year'] == 'Present' else 0
             c.execute("INSERT INTO Education VALUES (NULL,?,?,?,?,?,?,?,?,?)" , ed_row.values()) 
         print get_name(objs)
